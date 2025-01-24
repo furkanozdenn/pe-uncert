@@ -56,7 +56,7 @@ if __name__ == '__main__':
     now = datetime.datetime.now()
     date_suffix = now.strftime("%Y-%m-%d-%H-%M-%S")
     config_file_name = args.config.split('/')[-1].split('.')[0]
-    save_dir =  os.path.join(config_data['log_dir'], config_file_name, date_suffix)
+    save_dir =  os.path.join(config_training['log_dir'], config_file_name, date_suffix)
 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     )
 
     # construct data class 
-    data = PE_Dataset(config_data = config_data)
+    data = PE_Dataset(data_config = config_data)
 
     pdb.set_trace()
 

@@ -12,7 +12,7 @@ import numpy as np
 import argparse
 import wandb
 
-from pe_uncert_models.models.base import TbtcVAEBase
+from pe_uncert_models.models.base import crispAIPEBase
 from pe_uncert_models.models.math_utils import scaled_dot_product
 
 class PositionalEncoding(nn.Module):

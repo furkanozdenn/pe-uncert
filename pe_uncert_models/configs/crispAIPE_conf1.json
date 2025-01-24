@@ -1,6 +1,5 @@
 {
     "model_parameters": {
-      "pegrna_seq_len": 23,
       "target_dna_flank_len": 0,
       "kmer_size": 3,
       "char_dict_len": 5,
@@ -12,8 +11,14 @@
       "d_out_hid": 512
     },
     "data_parameters": {
+      "data": "pridict-90k-cleaned",
+      "project_name": "crispAIPE",
       "vocab_path": "../vocab/vocab_3mer.txt",
-      "train_data_path": "../data/pridict_data/pridict-90k-cleaned.csv",
+      "vocab_char_dict": "ACGTN",
+      "train_data_path": "../../data/pridict_data/pridict-90k-cleaned.csv",
+      "test_data_path": "../../data/pridict_data/pridict-90k-cleaned.csv",
+      "pegrna_length": 100,
+      "val_split": 0.1,
       "batch_size": 128,
       "epochs": 100
     },
@@ -27,6 +32,9 @@
       "grad_clip": 1.0,
       "min_lr": 1e-5,
       "valid_split": 0.2,
-      "early_stop_patience": 8
+      "early_stop_patience": 8,
+      "log_dir": "../logs",
+      "early_stopping": true,
+      "patience": 8
     }
   }

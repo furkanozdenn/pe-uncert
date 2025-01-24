@@ -29,7 +29,6 @@ class PE_Dataset(pl.LightningDataModule):
         "train_data_path": "../../data/pridict_data/pridict-90k-cleaned_train.csv",
         "test_data_path": "../../data/pridict_data/pridict-90k-cleaned_test.csv",
         "batch_size": 128,
-        "log_dir": "../../logs/",
         "val_split": 0.1,
         "pegrna_length": 100
     """
@@ -44,7 +43,6 @@ class PE_Dataset(pl.LightningDataModule):
         self.train_data_path = data_config["train_data_path"]
         self.test_data_path = data_config["test_data_path"]
         self.batch_size = data_config["batch_size"]
-        self.log_dir = data_config["log_dir"]
         self.val_split = data_config["val_split"]
         self.pegrna_length = data_config["pegrna_length"]
 
