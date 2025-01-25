@@ -90,9 +90,6 @@ if __name__ == '__main__':
 
     # construct data class 
     data = PE_Dataset(data_config = config_data)
-
-    pdb.set_trace()
-
     # construct model
     model = crispAIPE(hparams = {**config_model, **config_data, **config_training})
 
@@ -124,6 +121,9 @@ if __name__ == '__main__':
         train_dataloaders = data.train_dataloader(),
         val_dataloaders = data.valid_dataloader(),
     )
+
+    pdb.set_trace()
+
 
     # save model
     trainer.save_checkpoint(os.path.join(save_dir, 'model.ckpt'))

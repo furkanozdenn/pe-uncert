@@ -29,24 +29,23 @@ class crispAIPE(crispAIPEBase):
         self.latent_dim = hparams.latent_dim
         self.hidden_dim = hparams.hidden_dim
         self.embedding_dim = hparams.embedding_dim
-        self.decoder_kernel_size = hparams.decoder_kernel_size
         self.layers = hparams.layers
         self.dropout = hparams.dropout
         self.nhead = hparams.nhead
         self.src_mask = None
         self.batch_size = hparams.batch_size
         self.lr = hparams.lr
-        self.model_name = "TbtcVAE"
-        self.bottleneck_dim = 8 # hparams.bottleneck_dim TODO: add to hparams
-        self.self_supervised = False # TODO: implement self supervised for unlabelled samples (SSVAE)
+        self.model_name = "crispAIPE"
+        self.bottleneck_dim = hparams.bottleneck_dim
+        self.assesor_type = hparams.assesor_type
 
-        self.sgrna_seq_len = hparams.sgrna_seq_len
+        self.sequence_length = hparams.sequence_length
         self.target_seq_flank_len = hparams.target_seq_flank_len
-        self.target_seq_len = self.sgrna_seq_len + self.target_seq_flank_len * 2
+        self.target_seq_len = self.sequence_length + self.target_seq_flank_len * 2
 
         # check hparams for input_dim and embedding_dim - should be compatible with vocab_kmer tokens
         self.embed = nn.Embedding(self.input_dim, self.embedding_dim)
-        self.pos_encoder = PositionalEncoding(d_model = self.embedding_dim, max_len = self.sgrna_seq_len)
+        self.pos_encoder = PositionalEncoding(d_model = self.embedding_dim, max_len = self.sequence_length)
         self.glob_attn_module = nn.Sequential(
             nn.Linear(self.embedding_dim, 1), nn.Softmax(dim = 1)
         )
@@ -62,9 +61,6 @@ class crispAIPE(crispAIPEBase):
         self.bottleneck_module = BottleNeck(self.embedding_dim, self.latent_dim)
         self.z_rep = None
 
-        ## init decoder model
-        self._init_decoder(hparams)
-
         ## init assesor model
         self._init_assesor(hparams)
 
@@ -74,6 +70,12 @@ class crispAIPE(crispAIPEBase):
         ## init bottleneck encoder
         self._init_bottleneck_encoder(hparams)
 
+        print(f"Number of parameters: {self._num_params()}")
+
+
+
+    def _num_params(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def _init_bottleneck_encoder(self, hparams):
         """Initialize bottleneck encoder model
@@ -90,24 +92,17 @@ class crispAIPE(crispAIPEBase):
         self.bottleneck_encoder = nn.Sequential(*layers)
 
 
-    def _init_decoder(self, hparams):
-        layers = [
-            nn.Linear(self.latent_dim, self.sgrna_seq_len * (self.hidden_dim // 2)),
-            ConvNet(self.hidden_dim // 2, self.hidden_dim),
-            nn.Conv1d(self.hidden_dim, self.input_dim, kernel_size = 3, padding = 1),
-        ]
-        self.decoder = nn.ModuleList(layers)
-
-
     def _init_assesor(self, hparams):
         """Initilaize Assesor model
-        TODO:
-        Choose from hparams.assesor_type
-        Now it only implements MLP-Assesor (target+sgRNA encodings (latent_dim * 2) -> 16 hidden -> 1 activity)
+
+        choose from: 
+        - multinomial
+        TODO: add distributions
         """
-        self.assesor_type = None
-        if self.assesor_type == True:
-            # MLP-Assesor
+        self.assesor_type = hparams.assesor_type
+        if self.assesor_type == "multinomial":
+            # multinomial parameters
+            
             layers = [
                 nn.Linear(self.latent_dim * 2, 16),
                 nn.ReLU(),
@@ -146,21 +141,6 @@ class crispAIPE(crispAIPEBase):
         z_rep = self.bottleneck_module(z_rep)
 
         return z_rep
-
-    def decode(self, z_rep):
-        """Decode z_rep to sgRNA sequence
-        """
-        h_rep = z_rep
-
-        for indx, layer in enumerate(self.decoder):
-            if indx == 1:
-                h_rep = h_rep.reshape(-1, self.hidden_dim // 2, self.sgrna_seq_len)
-            
-            h_rep = layer(h_rep)
-        
-        return h_rep
-
-
 
 
 

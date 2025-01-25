@@ -55,6 +55,24 @@ def dataset_to_data_columns_dict(dataset_name):
         }
     else:
         raise ValueError(f"dataset_name: {dataset_name} not recognized")
+    
+
+def get_binary_location_mask(location_col, max_location):
+    """
+    the locations format expected is [M,N] (string) where max(N) is max_location
+    e.g., '[20,40]' means that the location is from 20 to 40 should be 1, otherwise 0
+    """
+    binary_masks = []
+    for loc in location_col:
+        mask = np.zeros(max_location, dtype=int)
+        # Remove brackets and split by comma
+        start, end = map(int, loc.strip('[]').split(','))
+        # Fill 1s from start to end (inclusive)
+        mask[start:end+1] = 1
+        binary_masks.append(mask)
+    return np.array(binary_masks)
+
+
 
 '''
 Function for one hot encoding n-bp NA sequences

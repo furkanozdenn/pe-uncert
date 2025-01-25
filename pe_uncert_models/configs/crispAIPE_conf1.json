@@ -8,7 +8,15 @@
       "d_model": 256,
       "n_layer": 12,
       "dropout": 0.1,
-      "d_out_hid": 512
+      "d_out_hid": 512,
+      "input_dim": 5,
+      "latent_dim": 128,
+      "hidden_dim": 256,
+      "embedding_dim": 256,
+      "layers": 12,
+      "nhead": 8,
+      "bottleneck_dim": 8,
+      "assesor_type": "multinomial"
     },
     "data_parameters": {
       "data": "pridict-90k-cleaned",
@@ -17,13 +25,15 @@
       "vocab_char_dict": "ACGTN",
       "train_data_path": "../../data/pridict_data/pridict-90k-cleaned.csv",
       "test_data_path": "../../data/pridict_data/pridict-90k-cleaned.csv",
-      "pegrna_length": 100,
+      "pegrna_length": 99,
+      "sequence_length": 99,
+      "target_seq_flank_len": 0,
       "val_split": 0.1,
       "batch_size": 128,
       "epochs": 100
     },
     "training_parameters": {
-      "learning_rate": 6e-4,
+      "lr": 6e-4,
       "decay_lr": true,
       "weight_decay": 0.01,
       "warmup_epochs": 10,
