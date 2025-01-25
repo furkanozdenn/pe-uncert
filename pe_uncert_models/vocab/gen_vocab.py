@@ -1,35 +1,39 @@
 import numpy as np
 import pdb
+from itertools import product
 
-"""
-Generates tokens for 3-mer model
-Single sequence tokens (sequences are not merged)
-"""
+def generate_vocab(k_mer=3):
+    """
+    Generates tokens and their corresponding indices for a k-mer model.
+    
+    Args:
+        k_mer (int): The length of the k-mer. Defaults to 3.
+    
+    Returns:
+        tuple: A tuple containing two dictionaries:
+               - token_to_index: Mapping from token to its index.
+               - index_to_token: Mapping from index to its token.
+    """
+    # Define characters for off-target sequences
+    char_dict = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4}  # TODO: add '-' for bulges
+    
+    # Generate all possible tokens using Cartesian product
+    tokens = [''.join(p) for p in product(char_dict.keys(), repeat=k_mer)]
+    
+    # Generate token to index and index to token dictionaries
+    token_to_index = {token: idx for idx, token in enumerate(tokens)}
+    index_to_token = {idx: token for idx, token in enumerate(tokens)}
+    
+    # Write token to index dictionary to file
+    filename = f'vocab_{k_mer}mer.txt'
+    with open(filename, 'w') as f:
+        for token, idx in token_to_index.items():
+            f.write(f'{token}\t{idx}\n')
+    
+    return token_to_index, index_to_token
 
-k_mer = 3
-
-# chars are 'A', 'C', 'G', 'T', 'N' for off-target sequences
-char_dict = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N':4} # TODO: add '-' for bulges
-
-# generate all possible tokens
-tokens = []
-for char1 in char_dict:
-    for char2 in char_dict:
-        for char3 in char_dict:
-            tokens.append(char1 + char2 + char3)
-
-# generate token to index dictionary
-token_to_index = {}
-for i, token in enumerate(tokens):
-    token_to_index[token] = i
-
-# generate index to token dictionary
-index_to_token = {}
-for i, token in enumerate(tokens):
-    index_to_token[i] = token
-
-# write token to index dictionary to file
-filename = f'single_seq_{k_mer}mer_tokens.txt'
-with open(filename, 'w') as f:
-    for token in token_to_index:
-        f.write(token + '\t' + str(token_to_index[token]) + '\n')
+# Example usage:
+if __name__ == "__main__":
+    # Generate vocabulary for 1-mers
+    token_to_index, index_to_token = generate_vocab(k_mer=2)
+    
