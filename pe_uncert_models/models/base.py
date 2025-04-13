@@ -56,7 +56,7 @@ class crispAIPEBase(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         preds, targets = self.shared_step(batch)
-        assert len(preds) == len(targets) +1, f"Preds: {len(preds)}, Targets: {len(targets)}"
+        # assert len(preds) == len(targets) +1, f"Preds: {len(preds)}, Targets: {len(targets)}"
 
         train_loss, train_loss_logs = self.loss_function(
             predictions = preds, targets = targets
@@ -73,7 +73,7 @@ class crispAIPEBase(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         preds, targets = self.shared_step(batch)
-        assert len(preds) == len(targets) + 1, f"Preds: {len(preds)}, Targets: {len(targets)}"
+        # assert len(preds) == len(targets) + 1, f"Preds: {len(preds)}, Targets: {len(targets)}"
 
         val_loss, val_loss_logs = self.loss_function(
             predictions = preds, targets = targets, valid_step = True

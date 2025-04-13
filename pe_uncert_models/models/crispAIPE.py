@@ -93,7 +93,15 @@ class crispAIPE(crispAIPEBase):
         self.final_dim = self.embedding_dim + self.unified_dim
         
         # Keep the ConvNet for other processing
-        self.conv_net = ConvNet(self.input_dim, self.input_dim)
+        self.conv_net = ConvNet(self.final_dim, 64)  # Process the combined representation
+        
+        # MLP to output 3 Dirichlet parameters
+        self.dirichlet_mlp = nn.Sequential(
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 3),
+            nn.Softplus()  # Ensure parameters are positive for Dirichlet
+        )
 
         print(f"Number of parameters: {self._num_params()}")
         self._print_param_breakdown()
@@ -107,11 +115,13 @@ class crispAIPE(crispAIPEBase):
         embedding_params = sum(p.numel() for p in self.embedding.parameters() if p.requires_grad)
         transformer_params = sum(p.numel() for p in self.transformer_encoder.parameters() if p.requires_grad)
         convnet_params = sum(p.numel() for p in self.conv_net.parameters() if p.requires_grad)
+        mlp_params = sum(p.numel() for p in self.dirichlet_mlp.parameters() if p.requires_grad)
         
         print(f"Parameter breakdown:")
         print(f"  Embedding: {embedding_params:,}")
         print(f"  Transformer encoder: {transformer_params:,}")
         print(f"  ConvNet: {convnet_params:,}")
+        print(f"  Dirichlet MLP: {mlp_params:,}")
     
     def _convert_onehot_to_indices(self, onehot_tensor):
         """
@@ -223,6 +233,7 @@ class crispAIPE(crispAIPEBase):
         # Apply transformer encoder
         # No need for attention mask as we want to attend to all positions
         transformer_embeddings = self.transformer_encoder(embedded_seq)  # Shape: [batch_size, seq_len, embedding_dim]
+        print("transformer_embeddings.shape: ", transformer_embeddings.shape)
         
         # Create unified representation with location information
         mutated_sequence = batch[1]
@@ -237,21 +248,96 @@ class crispAIPE(crispAIPEBase):
         final_representation = torch.cat([transformer_embeddings, unified_rep], dim=-1)
         # Shape: [batch_size, seq_len, embedding_dim + unified_dim]
         
-        # At this point, final_representation contains the combined representation for each position
-        # with both transformer embeddings and the unified representation
-        x_hat = final_representation  # This should be processed further based on the task
-        y_hat = None  # This will need to be defined based on what should be predicted
+        # Transpose the tensor for ConvNet (from [batch, seq_len, channels] to [batch, channels, seq_len])
+        final_representation_t = final_representation.transpose(1, 2)
         
-        return x_hat, y_hat  # This matches the expected return format from forward
+        # Process the final representation with ConvNet
+        conv_features = self.conv_net(final_representation_t)  # Shape: [batch_size, 64, seq_len]
+        
+        # Global max pooling to get a fixed-size representation
+        pooled_features = torch.max(conv_features, dim=2)[0]  # Shape: [batch_size, 64]
+        
+        # Generate Dirichlet parameters using MLP
+        dirichlet_params = self.dirichlet_mlp(pooled_features)  # Shape: [batch_size, 3]
+        
+        # Return the final representation and Dirichlet parameters
+        x_hat = final_representation
+        y_hat = dirichlet_params
+
+        pdb.set_trace()
+        return x_hat, y_hat
     
-    def loss_function(self, predictions, targets, valid_step = False):
-
+    def loss_function(self, predictions, targets, valid_step=False):
+        """
+        Implements the negative log likelihood loss for a Dirichlet distribution.
+        
+        Args:
+            predictions: Tuple containing (x_hat, y_hat) where:
+                - x_hat: The final representation 
+                - y_hat: Dirichlet parameters (α) of shape [batch_size, 3]
+            
+            targets: Tuple containing:
+                - batch[2]: total_read_count - total number of reads
+                - batch[3]: edited_percentage - proportion of edited outcomes
+                - batch[4]: unedited_percentage - proportion of unedited outcomes
+                - batch[5]: indel_percentage - proportion of indel outcomes
+                
+        Returns:
+            total_loss: The negative log likelihood loss
+            mloss_dict: Dictionary with loss components for logging
+        """
         x_hat, y_hat = predictions
-        x_true, y_true = targets
-
-        total_loss = 0.0
-
-        # TODO: Implement loss function
+        total_read_count, edited_percentage, unedited_percentage, indel_percentage = targets
+        
+        # Stack the percentage targets into a tensor of shape [batch_size, 3]
+        # Each row contains [edited, unedited, indel] proportions
+        dirichlet_targets = torch.stack([
+            edited_percentage, 
+            unedited_percentage, 
+            indel_percentage
+        ], dim=1)
+        
+        # Ensure the proportions sum to 1 (normalize)
+        dirichlet_targets = dirichlet_targets / torch.sum(dirichlet_targets, dim=1, keepdim=True)
+        
+        # The Dirichlet parameters (concentration parameters alpha)
+        alpha = y_hat  # Shape: [batch_size, 3]
+        
+        # Compute alpha_0 = sum(alpha)
+        alpha_0 = torch.sum(alpha, dim=1, keepdim=True)
+        
+        # Compute negative log likelihood
+        # NLL = log(B(α)) - ∑ᵢ (αᵢ-1) log(xᵢ)
+        # Where B(α) is the beta function: B(α) = ∏ᵢ Γ(αᵢ) / Γ(∑ᵢ αᵢ)
+        # log(B(α)) = ∑ᵢ log(Γ(αᵢ)) - log(Γ(∑ᵢ αᵢ))
+        
+        # Compute log(B(α)) using lgamma (log of gamma function)
+        log_beta = torch.sum(torch.lgamma(alpha), dim=1) - torch.lgamma(alpha_0.squeeze())
+        
+        # Compute ∑ᵢ (αᵢ-1) log(xᵢ)
+        # Add small epsilon to avoid log(0)
+        epsilon = 1e-10
+        log_likelihood_kernel = torch.sum((alpha - 1.0) * torch.log(dirichlet_targets + epsilon), dim=1)
+        
+        # Compute negative log likelihood
+        nll = log_beta - log_likelihood_kernel
+        
+        # Compute the mean NLL across the batch
+        total_loss = torch.mean(nll)
+        
+        # Optional: Weight the loss by the total read count (more weight for more confident samples)
+        # This assumes higher read count means more confidence in the proportions
+        if getattr(self.hparams, 'weight_by_read_count', False):
+            # Normalize read counts to get weights that sum to batch_size
+            weights = total_read_count / torch.mean(total_read_count) 
+            weighted_nll = nll * weights
+            total_loss = torch.mean(weighted_nll)
+        
+        # Create dictionary with loss components for logging
         mloss_dict = {
+            'dirichlet_nll': total_loss.item(),
+            'alpha_mean': torch.mean(alpha).item(),
+            'alpha_0_mean': torch.mean(alpha_0).item()
         }
+        
         return total_loss, mloss_dict
