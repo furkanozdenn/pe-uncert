@@ -57,13 +57,13 @@ class PE_Dataset(pl.LightningDataModule):
 
 
     def train_dataloader(self, shuffle_bool = True):
-        return DataLoader(self.train_data, batch_size = self.batch_size, shuffle = shuffle_bool)
+        return DataLoader(self.train_dataset, batch_size = self.batch_size, shuffle = shuffle_bool)
 
     def val_dataloader(self, shuffle_bool = False):
-        return DataLoader(self.val_data, batch_size = self.batch_size, shuffle = shuffle_bool)
+        return DataLoader(self.val_dataset, batch_size = self.batch_size, shuffle = shuffle_bool)
 
     def test_dataloader(self, shuffle_bool = False):
-        return DataLoader(self.test_data, batch_size = self.batch_size, shuffle = shuffle_bool)
+        return DataLoader(self.test_dataset, batch_size = self.batch_size, shuffle = shuffle_bool)
     
     def load_vocab(self):
         pass

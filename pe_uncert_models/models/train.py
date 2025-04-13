@@ -51,7 +51,7 @@ if __name__ == '__main__':
         parser.add_argument(f'--{key}', type=type(value), default=value)
 
     cl_args = parser.parse_args()
-    parser = Trainer.add_argparse_args(parser)
+    # parser = Trainer.add_argparse_args(parser) deprecated
 
     now = datetime.datetime.now()
     date_suffix = now.strftime("%Y-%m-%d-%H-%M-%S")
@@ -95,31 +95,29 @@ if __name__ == '__main__':
 
 
     if config_training['cpu']:
-        trainer = pl.Trainer.from_argparse_args(
-            args = {**config_model, **config_data, **config_training},
-            max_epochs = config_training['max_epochs'],
-            accelerator = 'cpu',
-            log_every_n_steps = 10,
-            logger = wandb_logger,
-            callbacks = [early_stop_callback, checkpoint_callback]
+        trainer = pl.Trainer(
+            max_epochs=config_training['max_epochs'],
+            accelerator='cpu',
+            log_every_n_steps=10,
+            logger=wandb_logger,
+            callbacks=[early_stop_callback, checkpoint_callback]
         )
     else:
         print(f'Using GPUs: {config_training["gpus"]}')
-        trainer = pl.Trainer.from_argparse_args(
-            args = cl_args,
-            max_epochs = config_training['max_epochs'],
-            strategy = 'dp',
-            accelerator = 'gpu',
-            devices = config_training['gpus'], #this can be the gpu list
-            log_every_n_steps = 10,
-            logger = wandb_logger,
-            callbacks = [early_stop_callback, checkpoint_callback]
+        trainer = pl.Trainer(
+            max_epochs=config_training['max_epochs'],
+            strategy='dp',
+            accelerator='gpu',
+            devices=config_training['gpus'],  # this can be the gpu list
+            log_every_n_steps=10,
+            logger=wandb_logger,
+            callbacks=[early_stop_callback, checkpoint_callback]
         )
 
     trainer.fit(
         model = model,
         train_dataloaders = data.train_dataloader(),
-        val_dataloaders = data.valid_dataloader(),
+        val_dataloaders = data.val_dataloader(),
     )
 
     pdb.set_trace()

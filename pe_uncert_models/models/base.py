@@ -25,27 +25,25 @@ class crispAIPEBase(pl.LightningModule):
 
     def shared_step(self, batch):
 
-        # data, *targets = batch
-        '''data contains multiple modalities.
 
+        """
+        batch[0] -> initial_sequence 
+        batch[1] -> mutated_sequence
+        batch[2] -> total_read_count
+        batch[3] -> edited_percentage
+        batch[4] -> unedited_percentage
+        batch[5] -> indel_percentage
+        batch[6] -> protospacer_location
+        batch[7] -> pbs_location
+        batch[8] -> rt_initial_location
+        batch[9] -> rt_mutated_location
+        """
 
-        TODO: handle this in shared step instead of data module
-
-        Dataloader:
-        batch[0] -> sgrna
-        batch[1] -> sgrna same for reconstruction
-        batch[2] -> target
-        batch[3] -> activity
-
-        '''
-
-        # data is now batch[0] and batch[2]
-        data = batch[0], batch[2], batch[3] # sgrna, target, activity
-
-        # targets is now batch[1] and batch[3]
-        targets = batch[1], batch[3]
+        data = batch
+        targets = batch[2], batch[3], batch[4], batch[5]
 
         preds = self(data)
+        
         return preds, targets
 
     def forward(self, batch):

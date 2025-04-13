@@ -3,16 +3,36 @@ Transformer-based target conditioned Variational Auto Encoder (TbtcVAE) model.
 """
 import wandb
 import argparse
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
+import numpy as np
 
-
-from pe_uncert_models.models.block_nets import ConvNet, LSTMNet, BottleNeck, FusionActivityAssesor, SeqConcatActivityAssesor,\
-    TargetConvNetEncoder
+import pdb
+from pe_uncert_models.models.block_nets import ConvNet, LSTMNet
 from pe_uncert_models.models.base import crispAIPEBase
-from pe_uncert_models.models.transformers import PositionalEncoding, TransformerEncoder
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=100):
+        super(PositionalEncoding, self).__init__()
+        
+        # Create a long enough pe
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        
+        self.register_buffer('pe', pe)
+        
+    def forward(self, x):
+        # Add positional encoding to input
+        return x + self.pe[:, :x.size(1)]
+
 
 class crispAIPE(crispAIPEBase):
 
@@ -24,182 +44,205 @@ class crispAIPE(crispAIPEBase):
 
         self.save_hyperparameters()
 
-        # model parameters
-        self.input_dim = hparams.input_dim # this is the size of the vocabulary 
-        self.latent_dim = hparams.latent_dim
-        self.hidden_dim = hparams.hidden_dim
-        self.embedding_dim = hparams.embedding_dim
-        self.layers = hparams.layers
-        self.dropout = hparams.dropout
-        self.nhead = hparams.nhead
-        self.src_mask = None
-        self.batch_size = hparams.batch_size
-        self.lr = hparams.lr
+        # model parameters
+        # self.input_dim = hparams.input_dim # this is the size of the vocabulary 
+        self.input_dim = getattr(hparams, 'input_dim', 5)
+        
+        # The unified representation will have:
+        # - 5 channels from one-hot
+        # - 2 channels for mismatch direction
+        # - 4 channels for locations (protospacer, pbs, rt_initial, rt_mutated)
+        # Total: 11 channels
+        self.direction_channels = 2
+        self.location_channels = 4
+        self.unified_dim = self.input_dim + self.direction_channels + self.location_channels
+
+        self.batch_size = getattr(hparams, 'batch_size', 128)
+        self.lr = getattr(hparams, 'lr', 6e-4)
         self.model_name = "crispAIPE"
-        self.bottleneck_dim = hparams.bottleneck_dim
-        self.assesor_type = hparams.assesor_type
 
-        self.sequence_length = hparams.sequence_length
-        self.target_seq_flank_len = hparams.target_seq_flank_len
-        self.target_seq_len = self.sequence_length + self.target_seq_flank_len * 2
-
-        # check hparams for input_dim and embedding_dim - should be compatible with vocab_kmer tokens
-        self.embed = nn.Embedding(self.input_dim, self.embedding_dim)
-        self.pos_encoder = PositionalEncoding(d_model = self.embedding_dim, max_len = self.sequence_length)
-        self.glob_attn_module = nn.Sequential(
-            nn.Linear(self.embedding_dim, 1), nn.Softmax(dim = 1)
+        self.sequence_length = getattr(hparams, 'sequence_length', 99) # assuming initial sequence and modified sequence are of the same length
+        self.target_seq_flank_len = getattr(hparams, 'target_seq_flank_len', 0) # keeping no flank around DNA sequence
+        
+        # Transformer encoder parameters - significantly reduced for fewer parameters
+        self.embedding_dim = getattr(hparams, 'embedding_dim', 8)
+        self.nhead = getattr(hparams, 'nhead', 2)
+        self.num_encoder_layers = getattr(hparams, 'num_encoder_layers', 2)  # Reduced from 6 to 2
+        self.dim_feedforward = getattr(hparams, 'dim_feedforward', 32)  # Reduced from 256 to 32
+        self.dropout = getattr(hparams, 'dropout', 0.1)
+        
+        # Embedding layer for transformer approach
+        self.vocab_size = self.input_dim
+        self.embedding = nn.Embedding(self.vocab_size, self.embedding_dim)
+        
+        # Positional encoding
+        self.pos_encoder = PositionalEncoding(self.embedding_dim, max_len=self.sequence_length)
+        
+        # Transformer encoder
+        encoder_layers = nn.TransformerEncoderLayer(
+            d_model=self.embedding_dim, 
+            nhead=self.nhead,
+            dim_feedforward=self.dim_feedforward,
+            dropout=self.dropout,
+            batch_first=True
         )
-
-        self.transformer_encoder = TransformerEncoder(
-            num_layers = self.layers,
-            input_dim = self.embedding_dim,
-            num_heads = self.nhead,
-            dim_feedforward = self.hidden_dim,
-            dropout = self.dropout
-        )
-
-        self.bottleneck_module = BottleNeck(self.embedding_dim, self.latent_dim)
-        self.z_rep = None
-
-        ## init assesor model
-        self._init_assesor(hparams)
-
-        ## init target encoder model
-        self._init_target_encoder(hparams)
-
-        ## init bottleneck encoder
-        self._init_bottleneck_encoder(hparams)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=self.num_encoder_layers)
+        
+        # Projection for the final concatenated representation
+        # The concatenated representation will have embedding_dim + unified_dim channels
+        self.final_dim = self.embedding_dim + self.unified_dim
+        
+        # Keep the ConvNet for other processing
+        self.conv_net = ConvNet(self.input_dim, self.input_dim)
 
         print(f"Number of parameters: {self._num_params()}")
-
+        self._print_param_breakdown()
 
 
     def _num_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-    def _init_bottleneck_encoder(self, hparams):
-        """Initialize bottleneck encoder model
-        Inputs: sgRNA encoding, target encoding and activity score. (16 + 16 + 1 -> 16 hidden -> out)
-        Outputs: The two parameters of the latent space representation (mu, logvar)
-        Infer the probability distribution of p(z|x) from the input data by fitting variational
-        distribution q_φ(z|x,y,t) 
-        """
-        layers = [
-            nn.Linear(self.sgrna_seq_len + self.target_seq_len + 1, 16),
-            nn.ReLU(),
-            nn.Linear(16, self.latent_dim),
-        ]
-        self.bottleneck_encoder = nn.Sequential(*layers)
-
-
-    def _init_assesor(self, hparams):
-        """Initilaize Assesor model
-
-        choose from: 
-        - multinomial
-        TODO: add distributions
-        """
-        self.assesor_type = hparams.assesor_type
-        if self.assesor_type == "multinomial":
-            # multinomial parameters
-            
-            layers = [
-                nn.Linear(self.latent_dim * 2, 16),
-                nn.ReLU(),
-                nn.Linear(16, 1),
-            ]
-            self.assesor_module = nn.Sequential(*layers)
-        else:
-            raise ValueError(f"Assesor type {self.assesor_type} not supported. Choose from 'fusion_activity_assesor', 'seq_concat_activity_assesor'")
-
-    def _init_target_encoder(self, hparams):
-        """Initialize target encoder model
-        TODO: Implement other decoders
-        """
-        self.target_encoder = TargetConvNetEncoder(hparams)
-
-
-    def transformer_encoding(self, embedded_batch):
-        """Transformer encoding of embedded_batch
-        """
-        if self.src_mask is None or self.src_mask.size(0) != len(embedded_batch):
-            self.src_mask = self._generate_square_subsequent_mask(embedded_batch.size(1))
-        pos_encoded_batch = self.pos_encoder(embedded_batch)
-        output_embed = self.transformer_encoder(pos_encoded_batch, self.src_mask)
-
-        return output_embed
-
-    def encode(self, batch):
-        embedded_batch = self.embed(batch)
-        output_embed = self.transformer_encoding(embedded_batch)
-        glob_attn = self.glob_attn_module(output_embed)
-        z_rep = torch.bmm(glob_attn.transpose(-1,1), output_embed).squeeze()
-
-        if len(embedded_batch) == 1:
-            z_rep = z_rep.unsqueeze(0)
+    
+    def _print_param_breakdown(self):
+        """Print breakdown of parameters by component"""
+        embedding_params = sum(p.numel() for p in self.embedding.parameters() if p.requires_grad)
+        transformer_params = sum(p.numel() for p in self.transformer_encoder.parameters() if p.requires_grad)
+        convnet_params = sum(p.numel() for p in self.conv_net.parameters() if p.requires_grad)
         
-        z_rep = self.bottleneck_module(z_rep)
-
-        return z_rep
-
-
+        print(f"Parameter breakdown:")
+        print(f"  Embedding: {embedding_params:,}")
+        print(f"  Transformer encoder: {transformer_params:,}")
+        print(f"  ConvNet: {convnet_params:,}")
+    
+    def _convert_onehot_to_indices(self, onehot_tensor):
+        """
+        Convert one-hot encoded tensor to token indices.
+        
+        Args:
+            onehot_tensor: Tensor of shape [batch_size, seq_len, input_dim]
+            
+        Returns:
+            Tensor of shape [batch_size, seq_len] with token indices
+        """
+        # Get the index of the maximum value along the last dimension
+        # This converts a one-hot vector [0,1,0,0,0] to the index 1
+        indices = torch.argmax(onehot_tensor, dim=-1)
+        return indices
+    
+    def _create_unified_representation(self, initial_seq, mutated_seq, locations):
+        """
+        Create a unified representation by performing logical OR between initial and mutated sequences,
+        adding two channels for direction of mismatch, and 4 channels for various locations.
+        
+        This is a utility method that can be used by other subnetworks.
+        
+        Args:
+            initial_seq: Initial sequence tensor of shape [batch_size, seq_len, input_dim]
+            mutated_seq: Mutated sequence tensor of shape [batch_size, seq_len, input_dim]
+            locations: List of 4 location tensors, each of shape [batch_size, seq_len]
+                - protospacer_location
+                - pbs_location
+                - rt_initial_location
+                - rt_mutated_location
+            
+        Returns:
+            Unified representation tensor of shape [batch_size, seq_len, input_dim+2+4]
+        """
+        batch_size, seq_len, _ = initial_seq.shape
+        
+        # Perform logical OR between initial and mutated sequences
+        # Convert to boolean tensors for OR operation, then back to float
+        initial_bool = initial_seq.bool()
+        mutated_bool = mutated_seq.bool()
+        or_result = (initial_bool | mutated_bool).float()
+        
+        # Create direction channels
+        # Direction [1,0]: initial -> mutated (value increases)
+        # Direction [0,1]: initial <- mutated (value decreases)
+        # Direction [0,0]: no mismatch
+        
+        # First identify positions where there's a mismatch
+        # Get the indices of the "hot" position in each one-hot vector
+        initial_indices = torch.argmax(initial_seq, dim=-1)  # [batch_size, seq_len]
+        mutated_indices = torch.argmax(mutated_seq, dim=-1)  # [batch_size, seq_len]
+        
+        # Create direction tensors
+        direction = torch.zeros(batch_size, seq_len, 2, device=initial_seq.device)
+        
+        # Calculate where initial < mutated (direction [1,0])
+        direction_up = (initial_indices < mutated_indices).unsqueeze(-1)
+        direction[:, :, 0:1] = direction_up.float()
+        
+        # Calculate where initial > mutated (direction [0,1])
+        direction_down = (initial_indices > mutated_indices).unsqueeze(-1)
+        direction[:, :, 1:2] = direction_down.float()
+        
+        # Process location vectors - add a dimension for concatenation
+        location_channels = []
+        for loc in locations:
+            # Ensure the location tensor has the right shape [batch_size, seq_len, 1]
+            if len(loc.shape) == 2:
+                loc = loc.unsqueeze(-1)
+            location_channels.append(loc)
+        
+        # Concatenate all location channels
+        location_tensor = torch.cat(location_channels, dim=-1)  # [batch_size, seq_len, 4]
+        
+        # Concatenate OR result with direction and location channels
+        unified_rep = torch.cat([or_result, direction, location_tensor], dim=-1)  # [batch_size, seq_len, input_dim+2+4]
+        
+        return unified_rep
 
     def forward(self, batch):
-
         """
-        modify batch to be a tuple with target_encoding as second element
-        to be used by assess_activity function
+        Process the input sequence through the transformer encoder and combine with unified representation.
+        
+        Args:
+            batch: List containing various inputs
+                batch[0]: initial_sequence - tensor of shape [batch_size, seq_len, input_dim]
+                batch[1]: mutated_sequence - tensor of shape [batch_size, seq_len, input_dim]
+                batch[6]: protospacer_location - tensor of shape [batch_size, seq_len]
+                batch[7]: pbs_location - tensor of shape [batch_size, seq_len]
+                batch[8]: rt_initial_location - tensor of shape [batch_size, seq_len]
+                batch[9]: rt_mutated_location - tensor of shape [batch_size, seq_len]
+                
+        Returns:
+            A tuple containing processed outputs
         """
-
-        batch_target_encoding = batch[1]
-        # pdb.set_trace()
-        # batch_target_encoding should be of type float 
-        batch_target_encoding = batch_target_encoding.float()
-
-        batch = batch[0]
-        z_rep = self.encode(batch)
-
-        self.z_rep = z_rep
-        self.dyn_interp_bool = self.interp_samping and z_rep.size(0) == self.batch_size
-        if self.dyn_interp_bool:
-            z_i_rep = self.interpolation_sampling(z_rep)
-            interp_z_rep = torch.cat((z_rep, z_i_rep), 0)
-            x_hat = self.decode(interp_z_rep)
-
-        else:
-            x_hat = self.decode(z_rep)
-
-        # regardless of interpolative sampling, assesor x_hat is based on actual z_rep
-        x_hat_assesor = self.decode(z_rep)
-
-        self.dyn_neg_bool = self.negative_sampling and z_rep.size(0) == self.batch_size
-        if self.dyn_neg_bool:
-            z_n_rep = self.add_negative_samples()
-            neg_z_rep = torch.cat((z_rep, z_n_rep), 0)
-
-            # extend x_hat_assesor with negative samples
-            z_n_rep_dec = self.decode(z_n_rep)
-
-            x_hat_assesor = torch.cat((x_hat_assesor, z_n_rep_dec), 0)
-
-            if self.assesor_type == "fusion_activity_assesor":
-                y_hat = self.assesor_module(neg_z_rep, batch_target_encoding)
-            elif self.assesor_type == "seq_concat_activity_assesor":
-                y_hat = self.assesor_module(x_hat_assesor, batch_target_encoding)
-            else:
-                raise ValueError(f"No assesor type {self.assesor_type} found")
-
-        else:
-            if self.assesor_type == "fusion_activity_assesor":
-                y_hat = self.assesor_module(z_rep, batch_target_encoding)
-            elif self.assesor_type == "seq_concat_activity_assesor":
-                y_hat = self.assesor_module(x_hat_assesor, batch_target_encoding)
-            else:
-                raise ValueError(f"No assesor type {self.assesor_type} found")
-
-        return [x_hat, y_hat], z_rep
-
-
+        # Extract the initial sequence for transformer processing
+        initial_sequence = batch[0]  # Shape: [batch_size, seq_len, input_dim]
+        
+        # Convert one-hot vectors to token indices
+        token_indices = self._convert_onehot_to_indices(initial_sequence)  # Shape: [batch_size, seq_len]
+        
+        # Apply embedding
+        embedded_seq = self.embedding(token_indices)  # Shape: [batch_size, seq_len, embedding_dim]
+        
+        # Add positional encoding
+        embedded_seq = self.pos_encoder(embedded_seq)
+        
+        # Apply transformer encoder
+        # No need for attention mask as we want to attend to all positions
+        transformer_embeddings = self.transformer_encoder(embedded_seq)  # Shape: [batch_size, seq_len, embedding_dim]
+        
+        # Create unified representation with location information
+        mutated_sequence = batch[1]
+        location_tensors = [batch[6], batch[7], batch[8], batch[9]]
+        unified_rep = self._create_unified_representation(
+            initial_sequence, 
+            mutated_sequence, 
+            location_tensors
+        )  # Shape: [batch_size, seq_len, unified_dim]
+        
+        # Concatenate transformer embeddings with unified representation
+        final_representation = torch.cat([transformer_embeddings, unified_rep], dim=-1)
+        # Shape: [batch_size, seq_len, embedding_dim + unified_dim]
+        
+        # At this point, final_representation contains the combined representation for each position
+        # with both transformer embeddings and the unified representation
+        x_hat = final_representation  # This should be processed further based on the task
+        y_hat = None  # This will need to be defined based on what should be predicted
+        
+        return x_hat, y_hat  # This matches the expected return format from forward
     
     def loss_function(self, predictions, targets, valid_step = False):
 
@@ -208,7 +251,7 @@ class crispAIPE(crispAIPEBase):
 
         total_loss = 0.0
 
-        # TODO: Implement loss function
+        # TODO: Implement loss function
         mloss_dict = {
         }
         return total_loss, mloss_dict
