@@ -56,14 +56,52 @@ class PE_Dataset(pl.LightningDataModule):
         self._setup()
 
 
-    def train_dataloader(self, shuffle_bool = True):
-        return DataLoader(self.train_dataset, batch_size = self.batch_size, shuffle = shuffle_bool)
+    def train_dataloader(self, shuffle_bool=True):
+        # Setup MPS generator if needed
+        generator = None
+        if torch.backends.mps.is_available() and torch.device(torch.empty(1).device).type == 'mps':
+            generator = torch.Generator(device='mps')
+        elif torch.cuda.is_available():
+            generator = torch.Generator(device='cuda')
+        
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=shuffle_bool,
+            generator=generator if shuffle_bool else None
+        )
 
-    def val_dataloader(self, shuffle_bool = False):
-        return DataLoader(self.val_dataset, batch_size = self.batch_size, shuffle = shuffle_bool)
+    def val_dataloader(self, shuffle_bool=False):
+        # Setup MPS generator if needed
+        generator = None
+        if shuffle_bool:
+            if torch.backends.mps.is_available() and torch.device(torch.empty(1).device).type == 'mps':
+                generator = torch.Generator(device='mps')
+            elif torch.cuda.is_available():
+                generator = torch.Generator(device='cuda')
+        
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            shuffle=shuffle_bool,
+            generator=generator if shuffle_bool else None
+        )
 
-    def test_dataloader(self, shuffle_bool = False):
-        return DataLoader(self.test_dataset, batch_size = self.batch_size, shuffle = shuffle_bool)
+    def test_dataloader(self, shuffle_bool=False):
+        # Setup MPS generator if needed
+        generator = None
+        if shuffle_bool:
+            if torch.backends.mps.is_available() and torch.device(torch.empty(1).device).type == 'mps':
+                generator = torch.Generator(device='mps')
+            elif torch.cuda.is_available():
+                generator = torch.Generator(device='cuda')
+        
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            shuffle=shuffle_bool,
+            generator=generator if shuffle_bool else None
+        )
     
     def load_vocab(self):
         pass

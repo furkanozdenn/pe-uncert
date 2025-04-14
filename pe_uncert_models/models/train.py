@@ -6,6 +6,7 @@ import time
 import os 
 import sys
 import json
+import platform
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from argparse import ArgumentParser
 
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
@@ -88,6 +89,11 @@ if __name__ == '__main__':
         mode='min',
     )
 
+    rich_progress = RichProgressBar(
+        refresh_rate=1,
+        leave=True
+    )
+
     # construct data class 
     data = PE_Dataset(data_config = config_data)
     # construct model
@@ -100,8 +106,42 @@ if __name__ == '__main__':
             accelerator='cpu',
             log_every_n_steps=10,
             logger=wandb_logger,
-            callbacks=[early_stop_callback, checkpoint_callback]
+            callbacks=[early_stop_callback, checkpoint_callback, rich_progress]
         )
+    elif platform.system() == 'Darwin' and 'arm' in platform.machine():
+        # Check if MPS is available
+        if torch.backends.mps.is_available():
+            print("Using Apple Silicon GPU (MPS)")
+            # Explicitly set the default device
+            torch.set_default_device('mps')
+            
+            # Force PyTorch to use MPS
+            os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+            
+            trainer = pl.Trainer(
+                max_epochs=config_training['max_epochs'],
+                accelerator='mps',  
+                devices=1,          
+                log_every_n_steps=10,
+                logger=wandb_logger,
+                callbacks=[early_stop_callback, checkpoint_callback, rich_progress],
+                # These flags help ensure GPU usage
+                deterministic=False,
+            )
+            
+            # Print device info for debugging
+            print(f"Default device: {torch.device('mps')}")
+            print(f"PyTorch MPS device available: {torch.backends.mps.is_available()}")
+            print(f"PyTorch MPS device built: {torch.backends.mps.is_built()}")
+        else:
+            print("MPS is not available, falling back to CPU")
+            trainer = pl.Trainer(
+                max_epochs=config_training['max_epochs'],
+                accelerator='cpu',
+                log_every_n_steps=10,
+                logger=wandb_logger,
+                callbacks=[early_stop_callback, checkpoint_callback, rich_progress]
+            )
     else:
         print(f'Using GPUs: {config_training["gpus"]}')
         trainer = pl.Trainer(
@@ -111,7 +151,7 @@ if __name__ == '__main__':
             devices=config_training['gpus'],  # this can be the gpu list
             log_every_n_steps=10,
             logger=wandb_logger,
-            callbacks=[early_stop_callback, checkpoint_callback]
+            callbacks=[early_stop_callback, checkpoint_callback, rich_progress]
         )
 
     trainer.fit(

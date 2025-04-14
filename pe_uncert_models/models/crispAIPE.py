@@ -233,7 +233,6 @@ class crispAIPE(crispAIPEBase):
         # Apply transformer encoder
         # No need for attention mask as we want to attend to all positions
         transformer_embeddings = self.transformer_encoder(embedded_seq)  # Shape: [batch_size, seq_len, embedding_dim]
-        print("transformer_embeddings.shape: ", transformer_embeddings.shape)
         
         # Create unified representation with location information
         mutated_sequence = batch[1]
@@ -264,7 +263,6 @@ class crispAIPE(crispAIPEBase):
         x_hat = final_representation
         y_hat = dirichlet_params
 
-        pdb.set_trace()
         return x_hat, y_hat
     
     def loss_function(self, predictions, targets, valid_step=False):
@@ -328,8 +326,8 @@ class crispAIPE(crispAIPEBase):
         # Optional: Weight the loss by the total read count (more weight for more confident samples)
         # This assumes higher read count means more confidence in the proportions
         if getattr(self.hparams, 'weight_by_read_count', False):
-            # Normalize read counts to get weights that sum to batch_size
-            weights = total_read_count / torch.mean(total_read_count) 
+            # Convert to float and normalize
+            weights = total_read_count.float() / torch.mean(total_read_count.float())
             weighted_nll = nll * weights
             total_loss = torch.mean(weighted_nll)
         

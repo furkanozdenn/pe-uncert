@@ -47,7 +47,7 @@
       "log_dir": "../logs",
       "early_stopping": true,
       "patience": 8,
-      "cpu": true,
+      "cpu": false,
       "max_epochs": 100
     }
   }
