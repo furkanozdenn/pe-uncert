@@ -84,9 +84,11 @@ if __name__ == '__main__':
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
         dirpath=save_dir,
-        filename='model-{epoch:02d}-{val_loss:.2f}',
+        filename='best_model-{epoch:02d}-val_loss_{val_loss:.4f}',
         save_top_k=1,
         mode='min',
+        verbose=True,
+        save_last=True,  # Also save the last model for potential recovery
     )
 
     rich_progress = RichProgressBar(
