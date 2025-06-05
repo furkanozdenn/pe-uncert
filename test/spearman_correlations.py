@@ -35,6 +35,8 @@ def load_model_and_data(config_path, checkpoint_path):
     # Load config
     with open(config_path, 'r') as f:
         config = json.load(f)
+
+    # Print config
     
     config_model = config['model_parameters']
     config_data = config['data_parameters']
