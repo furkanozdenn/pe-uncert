@@ -1,5 +1,4 @@
 """
-Transformer-based target conditioned Variational Auto Encoder (TbtcVAE) model. 
 """
 import wandb
 import argparse
