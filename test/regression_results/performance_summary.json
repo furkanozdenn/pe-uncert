@@ -1,0 +1,18 @@
+{
+  "Spearman Correlation": 0.8144954213576135,
+  "Spearman p-value": 0.0,
+  "Pearson Correlation": 0.792233407497406,
+  "Pearson p-value": 0.0,
+  "R-squared": 0.6276337504386902,
+  "MSE": 13.342778205871582,
+  "RMSE": 3.6527767181396484,
+  "MAE": 1.9706580638885498,
+  "Mean Target": 3.380842924118042,
+  "Std Target": 5.5181169509887695,
+  "Mean Prediction": 2.545982837677002,
+  "Std Prediction": 3.2282299995422363,
+  "Min Target": 0.0,
+  "Max Target": 62.345680236816406,
+  "Min Prediction": -0.33428752422332764,
+  "Max Prediction": 19.203397750854492
+}

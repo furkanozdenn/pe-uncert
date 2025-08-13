@@ -53,6 +53,19 @@ def dataset_to_data_columns_dict(dataset_name):
             'rt_initial_location': 'rt_initial_location',
             'rt_mutated_location': 'rt_mutated_location'
         }
+    elif dataset_name == 'deepprime':
+        return {
+            'initial_sequence': 'initial_sequence',
+            'mutated_sequence': 'mutated_sequence',
+            'total_read_count': 'total_read_count',
+            'edited_percentage': 'edited_percentage',
+            'unedited_percentage': 'unedited_percentage',
+            'indel_percentage': 'indel_percentage',
+            'protospacer_location': 'protospacer_location',
+            'pbs_location': 'pbs_location',
+            'rt_initial_location': 'rt_initial_location',
+            'rt_mutated_location': 'rt_mutated_location'
+        }
     else:
         raise ValueError(f"dataset_name: {dataset_name} not recognized")
     
