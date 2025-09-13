@@ -345,7 +345,7 @@ def plot_diagnostics_with_baselines(confidence_levels, crispAIPE_coverage, rf_co
         os.makedirs(output_dir)
     
     plt.style.use('seaborn-v0_8')
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 4))
     
     # Perfect calibration line
     ax.plot([0, 1], [0, 1], 'k--', alpha=0.7, linewidth=2, label='Perfect Calibration')

@@ -234,6 +234,42 @@ def calculate_correlations(model, data_module, output_dir, calc_all=False):
         all_plot_path = os.path.join(output_dir, 'all_correlations.png')
         plt.savefig(all_plot_path)
         print(f"All correlations plot saved to {all_plot_path}")
+        
+        # Create additional 1x3 subplot version (dropping "All Outcomes Combined")
+        fig_3, axes_3 = plt.subplots(1, 3, figsize=(18, 6))
+        
+        # Create scatter plots for the three main outcome types only
+        for i, (pred, true, title, corr) in enumerate([
+            (pred_edited, true_edited, 'Edited %', spearman_edited),
+            (pred_unedited, true_unedited, 'Unedited %', spearman_unedited),
+            (pred_indel, true_indel, 'Indel %', spearman_indel)
+        ]):
+            ax = axes_3[i]
+            
+            df_temp = pd.DataFrame({
+                f'True {title}': true,
+                f'Predicted {title}': pred
+            })
+            
+            sns.scatterplot(x=f'True {title}', y=f'Predicted {title}', data=df_temp, alpha=0.6, ax=ax)
+            sns.regplot(x=f'True {title}', y=f'Predicted {title}', data=df_temp, scatter=False, color='red', ax=ax)
+            
+            min_val = min(true.min(), pred.min())
+            max_val = max(true.max(), pred.max())
+            ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.5, label='Perfect Prediction')
+            
+            ax.annotate(f'Spearman ρ: {corr:.4f}', xy=(0.05, 0.95), xycoords='axes fraction',
+                       bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8),
+                       ha='left', va='top')
+            
+            ax.set_title(f'Correlation for {title}')
+            ax.grid(alpha=0.3)
+            ax.legend()
+        
+        plt.tight_layout()
+        all_plot_3_path = os.path.join(output_dir, 'all_correlations_3.png')
+        plt.savefig(all_plot_3_path)
+        print(f"All correlations 1x3 plot saved to {all_plot_3_path}")
     
     # Return the correlation results for edited percentage
     return {

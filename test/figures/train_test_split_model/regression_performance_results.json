@@ -1,0 +1,13 @@
+{
+  "crispAIPE_regression": {
+    "spearman_correlation": 0.8144954762376001,
+    "p_value": 0.0,
+    "n_samples": 28883
+  },
+  "DeepPrime": {
+    "spearman_correlation": 0.74
+  },
+  "EasyPrime": {
+    "spearman_correlation": 0.67
+  }
+}
