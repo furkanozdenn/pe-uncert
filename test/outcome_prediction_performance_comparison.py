@@ -278,14 +278,35 @@ def create_performance_comparison_plot(crispAIPE_results, competing_models, cris
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
+    # Calculate average performance for outcome prediction task first
+    crispAIPE_outcome_avg = np.mean([crispAIPE_results['intended_spearman'], 
+                                    crispAIPE_results['intended_pearson'],
+                                    crispAIPE_results['unintended_spearman'], 
+                                    crispAIPE_results['unintended_pearson']])
+    
+    oped_avg = np.mean([competing_models['OPED']['intended_spearman'],
+                        competing_models['OPED']['intended_pearson'],
+                        competing_models['OPED']['unintended_spearman'],
+                        competing_models['OPED']['unintended_pearson']])
+    
+    pridict_avg = np.mean([competing_models['PRIDICT']['intended_spearman'],
+                           competing_models['PRIDICT']['intended_pearson'],
+                           competing_models['PRIDICT']['unintended_spearman'],
+                           competing_models['PRIDICT']['unintended_pearson']])
+    
     # Prepare data for plotting - Outcome Prediction Task
     outcome_models = ['crispAIPE', 'OPED', 'PRIDICT']
-    outcome_metrics = ['Intended Edits\n(Spearman)', 'Intended Edits\n(Pearson)', 
+    outcome_metrics = ['Average\nPerformance', 'Intended Edits\n(Spearman)', 'Intended Edits\n(Pearson)', 
                       'Unintended Edits\n(Spearman)', 'Unintended Edits\n(Pearson)']
     
     # Extract values for outcome prediction task
     outcome_data = []
-    for metric in outcome_metrics:
+    
+    # Add average performance first
+    outcome_data.append([crispAIPE_outcome_avg, oped_avg, pridict_avg])
+    
+    # Add individual metrics
+    for metric in outcome_metrics[1:]:  # Skip the first one (Average) since we already added it
         if 'Intended' in metric and 'Spearman' in metric:
             values = [crispAIPE_results['intended_spearman'], 
                      competing_models['OPED']['intended_spearman'],
@@ -304,26 +325,6 @@ def create_performance_comparison_plot(crispAIPE_results, competing_models, cris
                      competing_models['PRIDICT']['unintended_pearson']]
         
         outcome_data.append(values)
-    
-    # Calculate average performance for outcome prediction task
-    crispAIPE_outcome_avg = np.mean([crispAIPE_results['intended_spearman'], 
-                                    crispAIPE_results['intended_pearson'],
-                                    crispAIPE_results['unintended_spearman'], 
-                                    crispAIPE_results['unintended_pearson']])
-    
-    oped_avg = np.mean([competing_models['OPED']['intended_spearman'],
-                        competing_models['OPED']['intended_pearson'],
-                        competing_models['OPED']['unintended_spearman'],
-                        competing_models['OPED']['unintended_pearson']])
-    
-    pridict_avg = np.mean([competing_models['PRIDICT']['intended_spearman'],
-                           competing_models['PRIDICT']['intended_pearson'],
-                           competing_models['PRIDICT']['unintended_spearman'],
-                           competing_models['PRIDICT']['unintended_pearson']])
-    
-    # Add average performance as a new metric for outcome prediction
-    outcome_metrics.append('Average\nPerformance')
-    outcome_data.append([crispAIPE_outcome_avg, oped_avg, pridict_avg])
     
     # Prepare data for plotting - Regression Task
     regression_models = ['crispAIPE-regression', 'DeepPrime', 'EasyPrime']

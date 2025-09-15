@@ -337,19 +337,52 @@ def plot_position_wise_attention(data, output_dir):
     positions = np.arange(seq_len)
     axes[0].plot(positions, position_attention, 'b-', linewidth=3, label='Average Attention')
     
-    # Overlay functional regions
+    # Overlay functional regions using vertical lines instead of fill_between to avoid legend overlap
     colors = {'protospacer': 'red', 'pbs': 'green', 'rt_initial': 'orange', 'rt_mutated': 'purple'}
+    region_boundaries = []
+    
+    # Define vertical positions for labels to avoid overlap
+    max_attention = np.max(position_attention)
+    label_positions = {
+        'protospacer': max_attention * 0.95,
+        'pbs': max_attention * 0.85,
+        'rt_initial': max_attention * 0.75,
+        'rt_mutated': max_attention * 0.65
+    }
+    
     for region, color in colors.items():
         region_mask = avg_locations[region] > 0.5  # Threshold for region presence
         if np.any(region_mask):
-            axes[0].fill_between(positions, 0, np.max(position_attention) * 1.1, 
-                                where=region_mask, alpha=0.3, color=color, 
-                                label=f'{region.title()} Region')
+            # Find region boundaries
+            region_positions = np.where(region_mask)[0]
+            if len(region_positions) > 0:
+                start_pos = region_positions[0]
+                end_pos = region_positions[-1]
+                region_boundaries.append((start_pos, end_pos, color, region))
+                
+                # Draw vertical lines at region boundaries
+                axes[0].axvline(x=start_pos, color=color, linestyle='--', alpha=0.7, linewidth=2)
+                axes[0].axvline(x=end_pos, color=color, linestyle='--', alpha=0.7, linewidth=2)
+                
+                # Add region label with staggered vertical positions to avoid overlap
+                mid_pos = (start_pos + end_pos) / 2
+                label_y = label_positions[region]
+                axes[0].text(mid_pos, label_y, 
+                           f'{region.title()}', ha='center', va='center', 
+                           fontsize=10, fontweight='bold', color=color,
+                           bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
     
     axes[0].set_xlabel('Sequence Position', fontsize=14)
     axes[0].set_ylabel('Average Attention Received', fontsize=14)
     axes[0].set_title('Position-wise Attention with Functional Regions', fontsize=16)
-    axes[0].legend()
+    
+    # Create a custom legend with region boundaries
+    legend_elements = [plt.Line2D([0], [0], color='blue', linewidth=3, label='Average Attention')]
+    for start_pos, end_pos, color, region in region_boundaries:
+        legend_elements.append(plt.Line2D([0], [0], color=color, linestyle='--', linewidth=2, 
+                                        label=f'{region.title()} Region (pos {start_pos}-{end_pos})'))
+    
+    axes[0].legend(handles=legend_elements, loc='upper right', fontsize=10)
     axes[0].grid(True, alpha=0.3)
     
     # Panel 2: Attention by editing efficiency
@@ -398,8 +431,8 @@ def plot_position_wise_attention(data, output_dir):
     axes[1].grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'position_wise_attention.png'), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join(output_dir, 'position_wise_attention.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(output_dir, 'position_wise_attention_color_modified.png'), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dir, 'position_wise_attention_color_modified.pdf'), bbox_inches='tight')
     plt.close()
     
     # Calculate regional attention statistics
