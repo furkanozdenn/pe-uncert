@@ -4,7 +4,6 @@ A deep learning model for predicting editing outcomes and uncertainty in CRISPR 
 
 ## Table of Contents
 
-- [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Data Requirements](#data-requirements)
