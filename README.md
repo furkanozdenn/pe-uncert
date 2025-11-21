@@ -1,4 +1,4 @@
-# crispAIPE: CRISPR Prime Editing Uncertainty Prediction Model
+# crispAIPE: Probabilistic Modelling of Prime Editing Variant Correction Efficiency
 
 A deep learning model for predicting editing outcomes and uncertainty in CRISPR prime editing experiments. The model uses a hybrid architecture combining Transformer encoders and CNNs to predict the distribution of editing outcomes (edited, unedited, and indel percentages).
 
@@ -13,14 +13,6 @@ A deep learning model for predicting editing outcomes and uncertainty in CRISPR 
 - [Configuration Options](#configuration-options)
 - [Project Structure](#project-structure)
 - [Citation](#citation)
-
-## Features
-
-- **Hybrid Architecture**: Combines Transformer encoders with CNNs for sequence understanding
-- **Uncertainty Quantification**: Predicts Dirichlet distributions over editing outcomes
-- **Train-Test Split Support**: Proper data splitting for rigorous evaluation
-- **Flexible Configuration**: All hyperparameters configurable via command-line or config files
-- **Research Tools**: Scripts for batch and single-example inference
 
 ## Installation
 
@@ -53,22 +45,10 @@ pip install pytorch-lightning wandb scipy scikit-learn pandas numpy
 4. (Optional) Activate your virtual environment:
 ```bash
 source /path/to/your/venv/bin/activate
+you may use pe-uncert.yaml env provided.
 ```
 
 ## Quick Start
-
-### Training a Model
-
-The easiest way to train the model is using the provided shell script:
-
-```bash
-./train_crispAIPE.sh \
-  --train_data_path data/pridict_data/pridict-train.csv \
-  --test_data_path data/pridict_data/pridict-test.csv \
-  --batch_size 128 \
-  --lr 0.0006 \
-  --epochs 100
-```
 
 ### Testing with Random Samples
 
@@ -102,76 +82,13 @@ The model uses the PRIDICT dataset format. Example data files:
 - Training: `data/pridict_data/pridict-train.csv`
 - Test: `data/pridict_data/pridict-test.csv`
 
-## Training the Model
-
-### Using the Shell Script (Recommended)
-
-The `train_crispAIPE.sh` script provides an easy way to train with customizable hyperparameters:
-
-```bash
-./train_crispAIPE.sh [OPTIONS]
-```
-
-#### Basic Usage
-
-```bash
-# Train with default parameters
-./train_crispAIPE.sh
-
-# Train with custom learning rate and batch size
-./train_crispAIPE.sh --lr 0.001 --batch_size 64
-
-# Train with custom data paths
-./train_crispAIPE.sh \
-  --train_data_path data/my_train.csv \
-  --test_data_path data/my_test.csv
-```
-
-#### Full Example
-
-```bash
-./train_crispAIPE.sh \
-  --train_data_path data/pridict_data/pridict-train.csv \
-  --test_data_path data/pridict_data/pridict-test.csv \
-  --batch_size 64 \
-  --lr 0.001 \
-  --epochs 50 \
-  --dropout 0.2 \
-  --n_layer 6 \
-  --embedding_dim 128 \
-  --early_stopping true \
-  --patience 10 \
-  --project_name my_experiment
-```
-
 #### View All Options
 
 ```bash
 ./train_crispAIPE.sh --help
 ```
 
-### Using Python Directly
-
-You can also train using the Python training script directly:
-
-```bash
-python pe_uncert_models/models/train.py \
-  --config pe_uncert_models/configs/crispAIPE_train_test_split_conf.json
-```
-
-### Training Output
-
-Training logs and checkpoints are saved to:
-```
-pe_uncert_models/logs/<project_name>/<timestamp>/
-```
-
-The directory contains:
-- `best_model-epoch=XX-val_loss=YY.ckpt`: Best model checkpoint
-- `last.ckpt`: Last epoch checkpoint
-- WandB logs (if enabled)
-
-## Testing and Inference
+## Runnin crispAIPE
 
 ### Test with Random Samples
 
@@ -269,25 +186,6 @@ Mean Errors Across Batch:
 | `cpu` | Use CPU only | false |
 | `gpus` | GPU IDs (comma-separated) | "" (auto-detect) |
 
-## Project Structure
-
-```
-pe-uncert/
-├── pe_uncert_models/          # Main package
-│   ├── models/                # Model definitions
-│   │   ├── crispAIPE.py       # Main crispAIPE model
-│   │   ├── train.py           # Training script
-│   │   └── ...
-│   ├── data_utils/            # Data loading utilities
-│   ├── configs/               # Configuration files
-│   └── vocab/                 # Vocabulary files
-├── data/                      # Data directory
-│   └── pridict_data/          # PRIDICT dataset
-├── test/                      # Testing and evaluation scripts
-├── train_crispAIPE.sh         # Training shell script
-├── test_crispAIPE_samples.py  # Testing script
-└── README.md                  # This file
-```
 
 ## Configuration Files
 
@@ -300,18 +198,6 @@ Pre-configured settings are available in `pe_uncert_models/configs/`:
 - `crispAIPE_cnn_only_conf.json`: CNN-only ablation
 - `crispAIPE_transformer_only_conf.json`: Transformer-only ablation
 
-## Advanced Usage
-
-### Custom Model Variants
-
-The codebase includes several model variants:
-
-1. **crispAIPE (Default)**: Hybrid Transformer + CNN with Dirichlet output
-2. **crispAIPE_Softmax**: Softmax output instead of Dirichlet
-3. **crispAIPE_LogitNormal**: Logit-normal distribution output
-4. **TransformerOnly**: Transformer-only architecture
-5. **CNNOnly**: CNN-only architecture
-
 ### Using Different Configurations
 
 Modify the config JSON file or use command-line arguments:
@@ -321,16 +207,6 @@ Modify the config JSON file or use command-line arguments:
   --config pe_uncert_models/configs/crispAIPE_softmax_conf.json \
   --assesor_type softmax
 ```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **CUDA Out of Memory**: Reduce `batch_size` or use CPU mode (`--cpu true`)
-2. **File Not Found**: Ensure data paths are correct relative to the config file location
-3. **Import Errors**: Make sure the package is installed (`pip install -e .`)
-
-### Device Selection
 
 The script automatically detects and uses:
 - CUDA GPUs (if available)
@@ -347,23 +223,17 @@ Force CPU mode:
 If you use this code in your research, please cite:
 
 ```bibtex
-@article{crispAIPE2024,
-  title={crispAIPE: Uncertainty-Aware Prediction of CRISPR Prime Editing Outcomes},
-  author={...},
-  journal={...},
-  year={2024}
-}
+coming soon
 ```
 
 ## License
 
-[Add your license information here]
+[![License: CC BY 4.0](https://licensebuttons.net/l/by/4.0/80x15.png)](https://creativecommons.org/licenses/by/4.0/)
+
+This work is funded by Google DeepMind.  
+The author has applied a **CC BY** public copyright licence to any Author Accepted Manuscript (AAM) version arising from this submission.
 
 ## Contact
 
-[Add contact information here]
-
-## Acknowledgments
-
-[Add acknowledgments here]
+furkan.ozden@cs.ox.ac.uk - peter.minary@cs.ox.ac.uk
 
