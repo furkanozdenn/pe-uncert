@@ -8,10 +8,7 @@ A deep learning model for predicting editing outcomes and uncertainty in CRISPR 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Data Requirements](#data-requirements)
-- [Training the Model](#training-the-model)
-- [Testing and Inference](#testing-and-inference)
-- [Configuration Options](#configuration-options)
-- [Project Structure](#project-structure)
+- [Testing and Inference](#running-crispAIPE)
 - [Citation](#citation)
 
 ## Installation
